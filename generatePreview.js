@@ -1,40 +1,47 @@
-// /api/generatePreview.js
-
-import { NextResponse } from 'next/server';
 import { OpenAI } from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export async function POST(req) {
-  const body = await req.json();
-  const { firstName, lastName, age, interests, guide } = body;
+export default async function handler(req, res) {
+  // ✅ Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', 'https://uu0j69-sm.myshopify.com');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  const storyPrompt = `Write a magical children's story featuring ${firstName}, a ${age}-year-old child who loves ${interests}. The story should use the stylistical model of ${guide}. Addie is a whirlwind of curiosity with an explorer's satchel always slung over his shoulder. Bursting with energy and questions, he's the kind of kid who can turn a quiet library into an explosion of imagination. His pockets are always stuffed with scraps of paper covered in wild "inventions," and his wide eyes sparkle with the promise of undiscovered worlds. Allie is a graceful fairy who glows with the light of a thousand stories. Her magical quill dances through the air, leaving a trail of sparkles that whisper of ancient tales and newfound adventures. More than just a guide, Allie is the keeper of wisdom, the narrator who helps children understand the true magic of storytelling. Make it whimsical and suitable for a bedtime read.`;
+  // ✅ Handle preflight request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
-  const imagePrompt = `A hardcover children's book cover titled "${firstName}'s Magical Adventure", showing a child exploring a magical world with a fairy and a boy, colorful and dreamy style`;
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
+    const { childName, age, interests, guide } = req.body;
+
+    const storyPrompt = `Write a magical children's story featuring ${guide} and ${childName}, a ${age}-year-old who loves ${interests}. Make it whimsical and suitable for bedtime.`;
+    const imagePrompt = `Children's book cover showing ${childName}, ${guide}, and a magical world. Colorful, imaginative, in storybook illustration style.`;
+
     const [storyRes, imageRes] = await Promise.all([
       openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [{ role: "user", content: storyPrompt }],
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: storyPrompt }],
       }),
       openai.images.generate({
-        model: "dall-e-3",
+        model: 'dall-e-3',
         prompt: imagePrompt,
         n: 1,
-        size: "1024x1024",
+        size: '1024x1024',
       }),
     ]);
 
-    const storyText = storyRes.choices[0].message.content;
-    const imageUrl = imageRes.data[0].url;
-
-    return NextResponse.json({ storyText, imageUrl });
+    return res.status(200).json({
+      storyText: storyRes.choices[0].message.content,
+      imageUrl: imageRes.data[0].url,
+    });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: 'Failed to generate preview' }, { status: 500 });
+    return res.status(500).json({ error: 'Something went wrong' });
   }
 }
